@@ -85,9 +85,9 @@ def determine_email_action(email: str) -> str:
     instructions = """
     If the email appears to be an invoice of any kind or related to
     billing, forward the email to the billing and invoices team:
-    billing@company.com
+    farrza111@gmail.com
     and send a wrong email notice back to the sender. The correct department is
-    billing@company.com.
+    fariz.rzayev7@gmail.com.
     If the email appears to be from a customer, forward to support@company.com,
     cdetuma@company.com, and ctu@abc.com. Be sure to forward it to all three
     emails listed.
