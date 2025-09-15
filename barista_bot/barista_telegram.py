@@ -4,12 +4,15 @@ Built following the Kaggle 5-day Generative AI course tutorial, adapted for Open
 """
 
 import os
+import requests
+import json
+from datetime import datetime
 from typing import Annotated, Literal
 from typing_extensions import TypedDict
 from collections.abc import Iterable
 from random import randint
 from pprint import pprint
-
+import os
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
@@ -18,10 +21,13 @@ from langchain_core.tools import tool
 from langchain_core.messages.ai import AIMessage
 from langchain_core.messages.tool import ToolMessage
 
+from dotenv import load_dotenv
 
-# Set up API key (you'll need to set this environment variable)
-# OPENAI_API_KEY = "your_api_key_here"
-# os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+load_dotenv()
+
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+
 
 class OrderState(TypedDict):
     """State representing the customer's order conversation."""
@@ -70,9 +76,59 @@ WELCOME_MSG = "Welcome to the BaristaBot cafe. Type `q` to quit. How may I serve
 
 # Initialize the LLM with OpenAI
 llm = ChatOpenAI(
-    model="gpt-4o",  # You can also use "gpt-3.5-turbo" for faster/cheaper responses
-    temperature=0.7
+    model="gpt-4o-mini",  # You can also use "gpt-3.5-turbo" for faster/cheaper responses
+    temperature=0.6
 )
+
+
+def send_order_to_telegram(
+        order_items: list[str],
+        eta_minutes: int
+) -> bool:
+    """Send order details to Telegram bot."""
+    try:
+        # Format the order message
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        order_text = "\n".join([f"  • {item}" for item in order_items])
+
+        message = f"""🤖 *BaristaBot New Order*
+
+📅 *Time:* {timestamp}
+⏰ *ETA:* {eta_minutes} minutes
+
+📋 *Order Details:*
+{order_text}
+
+🏪 *Status:* Sent to kitchen
+        """
+
+        # Telegram API URL
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
+        # Prepare the data
+        data = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message,
+            "parse_mode": "Markdown"
+        }
+
+        # Send the request
+        response = requests.post(url, data=data, timeout=10)
+
+        if response.status_code == 200:
+            print("✅ Order sent to Telegram successfully!")
+            return True
+        else:
+            print(f"❌ Failed to send to Telegram. Status: {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+
+    except requests.RequestException as e:
+        print(f"❌ Network error sending to Telegram: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Error sending to Telegram: {e}")
+        return False
 
 
 # Define the menu tool
@@ -249,9 +305,19 @@ def order_node(state: OrderState) -> OrderState:
             print("Sending order to kitchen!")
             print(order_text)
 
+            # Generate ETA
+            eta_minutes = randint(1, 5)  # ETA in minutes
+
+            # Send order to Telegram
+            telegram_success = send_order_to_telegram(order, eta_minutes)
+            if telegram_success:
+                print("📱 Order notification sent to Telegram!")
+            else:
+                print("⚠️  Order placed but Telegram notification failed")
+
             # TODO(you!): Implement cafe.
             order_placed = True
-            response = randint(1, 5)  # ETA in minutes
+            response = eta_minutes
 
         else:
             raise NotImplementedError(f'Unknown tool call: {tool_call["name"]}')
